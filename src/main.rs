@@ -1,6 +1,54 @@
+/// Helper function to add finite field elements together
+/// which is used throughout the cipher
+fn FiniteAdd(a: u8, b: u8) -> u8{
+    a ^ b
+}
+
+/// Helper function to multiply finite field elements
+/// together, which is used throught the cipher. Used 
+/// in FiniteMult function
+fn xtime(a: u8) -> u8 {
+    let mx = 0x1b;
+    let mut ret: u16 = a as u16;
+
+    ret = ret << 1;
+
+    if a & (0x80) != 0 { // see if the highest bit is set (b7)
+        ret ^= 0x1b;
+        ret &= 0xff; // keep it in byte range
+    }
+
+    ret as u8
+}
+
+/// Helper function to multiply finite field elements
+/// together, which is used throught the cipher
+fn FiniteMult(a: u8, b: u8) -> u8 {
+    let mut total = 0;
+    // what we can do is look at the bits values in b
+    // and use them as equivilent to each position
+    // i.e. for 0x13 --> 10011 --> 0x01+0x02+0x10
+    for i in 0..8{
+        let bit = b & (1<<i);
+        let mut xtime_val = a;
+        let mut tmp = 1;
+        
+        // get the correct xtime_value for the target bit and add it
+        if bit != 0 {
+            while tmp < bit{
+                xtime_val = xtime(xtime_val);
+                tmp = tmp << 1;
+            }
+            total = FiniteAdd(total, xtime_val);
+        }
+        
+    }
+
+    total
+}
 
 
-/// "Tranformatio-n in the Cipher and Inverse Cipher in which
+/// "Tranformation in the Cipher and Inverse Cipher in which
 /// a Round Key is added to the State using an XOR operation.
 /// The length of a Round Key equals the size of the STATE
 /// (i.e. for Nb=4, the Round Key length equals 128bit/16Byte)
@@ -150,4 +198,5 @@ fn main() {
     let Rcon: Vec<u32> = Vec::new();  // Round constant word array
 
 
+    println!("{}", FiniteMult(0x57,0x13));
 }
