@@ -52,8 +52,28 @@ fn FiniteMult(a: u8, b: u8) -> u8 {
 /// a Round Key is added to the State using an XOR operation.
 /// The length of a Round Key equals the size of the STATE
 /// (i.e. for Nb=4, the Round Key length equals 128bit/16Byte)
-fn AddRoundKey(state: &Vec<Vec<u8>>, thing: u32) -> u32 {
+fn AddRoundKey(state: &mut Vec<Vec<u8>>, roundkey: Vec<u8>) -> u32 {
+    // add the round key to each column, with each column getting added
+    // to each corresponding index of roundkey
+    for column in 0..state[0].len(){
+        for row in 0..state.len(){
+            state[row][column] = FiniteAdd(state[row][column], roundkey[column]);
+        }
+    }
     0
+}
+
+/// Expands the key for use in the algorithm
+fn KeyExpansion(key: Vec<u8>, w: &mut Vec<Vec<u8>>, Nk: u32){
+    let tmp: u32;
+
+    // populate the key schedule 
+    for i in 0..Nk{
+        w[i as usize][0] = key[(4*i) as usize];
+        w[i as usize][1] = key[(4*i+1) as usize];
+        w[i as usize][2] = key[(4*i+2) as usize];
+        w[i as usize][3] = key[(4*i+3) as usize];
+    }
 }
 
 /// Transformation in the Inverse Cipher that is the inverse
@@ -82,6 +102,20 @@ fn MixColumns(state: &mut Vec<Vec<u8>>) {
                   [1,2,3,1],
                   [1,1,2,3],
                   [3,1,1,2]];
+
+    for column in 0..state[0].len(){
+        for row in 0..matrix.len(){
+            let t1 = state[0][column];
+            let t2 = state[1][column];
+            let t3 = state[2][column];
+            let t4 = state[3][column];
+
+            state[row][column] = FiniteMult(t1, matrix[row][0]) ^
+                                 FiniteMult(t2, matrix[row][1]) ^
+                                 FiniteMult(t3, matrix[row][2]) ^
+                                 FiniteMult(t4, matrix[row][3]);
+        }
+    }
 }
 
 /// Used in the Key Expansion routine that takes a 4-byte word
@@ -149,13 +183,13 @@ fn Cipher(input: &mut Vec<Vec<u8>>, sbox: &Vec<Vec<u8>>,
     //let state:Vec<Vec<u8>> = vec![vec![0; 4]; Nb as usize];
     let state = input;
     
-    AddRoundKey(state, w[0][(Nb-1) as usize]); // See Sec. 5.1.4
+    AddRoundKey(state, vec!(0));//w[0][(Nb-1) as usize])); // See Sec. 5.1.4
     let cap = Nr-1;
     for round in 1..cap {
         SubBytes(sbox, state); // See Sec. 5.1.1
         ShiftRows(state); // See Sec. 5.1.2
         MixColumns(state); // See Sec. 5.1.3
-        AddRoundKey(state, w[(round*Nb) as usize][((round+1)*Nb-1) as usize]);
+        AddRoundKey(state, vec!(0)); //w[(round*Nb) as usize][((round+1)*Nb-1) as usize]);
     }
         
     
