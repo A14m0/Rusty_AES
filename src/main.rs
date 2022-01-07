@@ -1,15 +1,26 @@
+/// Helper function that converts 4 bytes into a 32-bit word
+fn MakeWord(a: u8, b: u8, c: u8, d: u8) -> u32 {
+    let mut o = 0;
+    o = (a as u32) << 24;
+    o += (b as u32) << 16;
+    o += (c as u32) << 8;
+    o += d as u32;
+
+    o
+}
+
 /// Helper function to add finite field elements together
 /// which is used throughout the cipher
-fn FiniteAdd(a: u8, b: u8) -> u8{
+fn FiniteAdd(a: u32, b: u32) -> u32{
     a ^ b
 }
 
 /// Helper function to multiply finite field elements
 /// together, which is used throught the cipher. Used 
 /// in FiniteMult function
-fn xtime(a: u8) -> u8 {
+fn xtime(a: u32) -> u32 {
     let mx = 0x1b;
-    let mut ret: u16 = a as u16;
+    let mut ret= a;
 
     ret = ret << 1;
 
@@ -18,12 +29,12 @@ fn xtime(a: u8) -> u8 {
         ret &= 0xff; // keep it in byte range
     }
 
-    ret as u8
+    ret
 }
 
 /// Helper function to multiply finite field elements
 /// together, which is used throught the cipher
-fn FiniteMult(a: u8, b: u8) -> u8 {
+fn FiniteMult(a: u32, b: u32) -> u32 {
     let mut total = 0;
     // what we can do is look at the bits values in b
     // and use them as equivilent to each position
@@ -52,27 +63,34 @@ fn FiniteMult(a: u8, b: u8) -> u8 {
 /// a Round Key is added to the State using an XOR operation.
 /// The length of a Round Key equals the size of the STATE
 /// (i.e. for Nb=4, the Round Key length equals 128bit/16Byte)
-fn AddRoundKey(state: &mut Vec<Vec<u8>>, roundkey: Vec<u8>) -> u32 {
+fn AddRoundKey(state: &mut Vec<u32>, roundkey: Vec<u32>) {
     // add the round key to each column, with each column getting added
     // to each corresponding index of roundkey
-    for column in 0..state[0].len(){
+    
+    // note: we know the state is 16x16
+    for column in 0..16{
         for row in 0..state.len(){
-            state[row][column] = FiniteAdd(state[row][column], roundkey[column]);
+            state[16*column + row] = FiniteAdd(state[16*column + row], roundkey[column]);
         }
     }
-    0
 }
 
 /// Expands the key for use in the algorithm
-fn KeyExpansion(key: Vec<u8>, w: &mut Vec<Vec<u8>>, Nk: u32){
-    let tmp: u32;
-
+fn KeyExpansion(key: Vec<u8>, w: &mut Vec<u32>, Nk: u32, Nb: u32, Nr: u32, Rcon: Vec<u32>){
+    
     // populate the key schedule 
     for i in 0..Nk{
-        w[i as usize][0] = key[(4*i) as usize];
-        w[i as usize][1] = key[(4*i+1) as usize];
-        w[i as usize][2] = key[(4*i+2) as usize];
-        w[i as usize][3] = key[(4*i+3) as usize];
+        w[i as usize] = MakeWord(key[(4*i) as usize], key[(4*i+1) as usize], key[(4*i+2) as usize], key[(4*i+3) as usize]);
+    }
+
+    for i in Nk..(Nb * (Nr+1)){
+        let mut tmp: u32 = w[(i-1) as usize];
+        if i % Nk == 0 {
+            tmp = SubWord(RotWord(tmp)) ^ Rcon[(i/Nk) as usize];
+        } else if (Nk > 6) && (i % Nk == 4) {
+            tmp = SubWord(tmp);
+        }
+        
     }
 }
 
@@ -97,20 +115,20 @@ fn InvSubBytes() -> u32 {
 /// Transformation in the Cipher that takes all of the columns
 /// of the State and mixes their data (independently of eachother)
 /// to produce new columns
-fn MixColumns(state: &mut Vec<Vec<u8>>) {
+fn MixColumns(state: &mut Vec<u32>) {
     let matrix = [[2,3,1,1],
                   [1,2,3,1],
                   [1,1,2,3],
                   [3,1,1,2]];
 
-    for column in 0..state[0].len(){
-        for row in 0..matrix.len(){
-            let t1 = state[0][column];
-            let t2 = state[1][column];
-            let t3 = state[2][column];
-            let t4 = state[3][column];
+    for column in 0..16 {
+        for row in 0..16 {
+            let t1 = state[16*column];
+            let t2 = state[16*column+1];
+            let t3 = state[16*column+2];
+            let t4 = state[16*column+3];
 
-            state[row][column] = FiniteMult(t1, matrix[row][0]) ^
+            state[16*column+row] = FiniteMult(t1, matrix[row][0]) ^
                                  FiniteMult(t2, matrix[row][1]) ^
                                  FiniteMult(t3, matrix[row][2]) ^
                                  FiniteMult(t4, matrix[row][3]);
@@ -120,23 +138,23 @@ fn MixColumns(state: &mut Vec<Vec<u8>>) {
 
 /// Used in the Key Expansion routine that takes a 4-byte word
 /// and performs a cyclic permutation
-fn RotWord() -> u32 {
+fn RotWord(word: u32) -> u32 {
     0
 }
 
 /// Transformation in the Cipher that processes the State by
 /// cyclically shifting the last three rows of the State by
 /// different offsets
-fn ShiftRows(state: &mut Vec<Vec<u8>>) {
+fn ShiftRows(state: &mut Vec<u32>) {
     // shift each row by its column index
-    for row in 0..state.len() {
-        let mut tmp_arr: Vec<u8> = Vec::with_capacity(state[row].len());
-        for col in 0..state[row].len(){
-            tmp_arr[col] = state[row][(col+row)%4] // get the value at index+offset, looping
+    for row in 0..16 {
+        let mut tmp_arr: Vec<u32> = vec![0; 16];
+        for col in 0..16{
+            tmp_arr[col] = state[(col+row)%4 + row] // get the value at index+offset, looping
         }
         // copy the data from the temporary array back into state
-        for j in 0..state[row].len(){
-            state[row][j] = tmp_arr[j];
+        for col in 0..16 {
+            state[16*col + row] = tmp_arr[col];
         }
     }
 }
@@ -144,7 +162,7 @@ fn ShiftRows(state: &mut Vec<Vec<u8>>) {
 /// Transformation in the Cipher that processes the State
 /// using a non-linear byte substitution table (S-box) that
 /// operates on each of the State bytes independently
-fn SubBytes(sbox: &Vec<Vec<u8>>, state: &mut Vec<Vec<u8>>) -> u32 {
+fn SubBytes(sbox: [[u32;16];16], state: &mut Vec<u32>) {
     // to transform a byte, we do this: 
     // say we had a value s(1,1) = 0x53
     // to compute the replaced value, we would go to 
@@ -152,24 +170,22 @@ fn SubBytes(sbox: &Vec<Vec<u8>>, state: &mut Vec<Vec<u8>>) -> u32 {
     // at the index (which should be 0xed)
 
     // for each row...
-    for i in 0..state.len() {
+    for i in 0..16 {
         // for each column
-        for j in 0..state[i].len(){
+        for j in 0..16{
             // replace the byte with the byte in sbox[bit&0xf0][bit&0xf]
-            let bit = state[i][j];
+            let bit = state[16*j + i];
             let x = bit & 0xf0;
             let y = bit & 0xf;
-            state[i][j] = sbox[x as usize][y as usize];
+            state[16*j + i] = sbox[x as usize][y as usize];
         }
     }
-
-    0
 }
 
 /// Used in the Key Expansion routine that takes 4-byte
 /// input word and applies an S-box to each of the four
 /// bytes to produce an output word.
-fn SubWord() -> u32 {
+fn SubWord(word: u32) -> u32 {
     0
 }
 
@@ -177,31 +193,33 @@ fn SubWord() -> u32 {
 /// Note in  -> vec<u8> [4 x Nb]
 ///      out -> vec<u8> [4 x Nb]
 ///      w   -> vec<u32> [Nb x (Nr+1)]
-fn Cipher(input: &mut Vec<Vec<u8>>, sbox: &Vec<Vec<u8>>,
-          w: Vec<Vec<u32>>, Nr: u32, Nb: u32)
+fn Cipher(input: &Vec<u32>, sbox: [[u32;16];16],
+          Nr: u32, Nb: u32, Nk: u32, Rcon: Vec<u32>) -> Vec<u32>
 {
     //let state:Vec<Vec<u8>> = vec![vec![0; 4]; Nb as usize];
-    let state = input;
+    let mut state = input.clone();
+    let mut w: Vec<u32> = vec![0; (Nb*(Nr+1)) as usize];
     
-    AddRoundKey(state, vec!(0));//w[0][(Nb-1) as usize])); // See Sec. 5.1.4
+    AddRoundKey(&mut state, w[0..(Nb-1) as usize].to_vec()); // See Sec. 5.1.4
     let cap = Nr-1;
     for round in 1..cap {
-        SubBytes(sbox, state); // See Sec. 5.1.1
-        ShiftRows(state); // See Sec. 5.1.2
-        MixColumns(state); // See Sec. 5.1.3
-        AddRoundKey(state, vec!(0)); //w[(round*Nb) as usize][((round+1)*Nb-1) as usize]);
+        SubBytes(sbox, &mut state); // See Sec. 5.1.1
+        ShiftRows(&mut state); // See Sec. 5.1.2
+        MixColumns(&mut state); // See Sec. 5.1.3
+        AddRoundKey(&mut state, w[(round*Nb) as usize..((round+1)*Nb-1) as usize].to_vec());//..((round+1)*Nb-1) as usize
     }
         
     
-    SubBytes(sbox, state);
-    ShiftRows(state);
-    AddRoundKey(state, w[(Nr*Nb) as usize][((Nr+1)*Nb-1) as usize]);
+    SubBytes(sbox, &mut state);
+    ShiftRows(&mut state);
+    AddRoundKey(&mut state, w[(Nr*Nb) as usize..((Nr+1)*Nb-1) as usize].to_vec());//..((Nr+1)*Nb-1) as usize
+
+    state.to_vec()
 }
 
-/// Main Function
-fn main() {
+fn encode(input: Vec<u32>){
     // our fancy little lookup table, called the S-box
-    let sbox = [[0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76],
+    let sbox: [[u32;16];16] = [[0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76],
     [0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0],
     [0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15],
     [0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75],
@@ -220,17 +238,66 @@ fn main() {
 
 
 
-    let K: Vec<u8> = Vec::new();   // the cipher key
+    let K: Vec<u32> = Vec::new();   // the cipher key
     let Nb: u32 = 4;        // Number of columns comprising the state
     // TODO: see if modifying this could be cool?
 
     // note that we are using the
     // below values for AES-256
     let Nk: u32 = 4;        // Number of 32-bit words comprising the Cipher Key
-    let Nr: u8  = 10;       // Number or rounds, function of Nk and Nb
+    let Nr: u32  = 10;       // Number or rounds, function of Nk and Nb
 
     let Rcon: Vec<u32> = Vec::new();  // Round constant word array
 
+    let out = Cipher(&input, sbox, Nr, Nb, Nk, Rcon);
 
-    println!("{}", FiniteMult(0x57,0x13));
+}
+
+/// Main Function
+fn main() {
+    
+    println!("{}", FiniteMult(0x57,0x83));
+}
+
+
+
+
+
+
+
+
+
+////////////////////////// TESTS BELOW //////////////////////
+
+#[cfg(test)]
+mod tests {
+    use crate::{FiniteMult, xtime, FiniteAdd};
+
+    #[test]
+    fn test_add() {
+        assert_eq!(FiniteAdd(0x57, 0x83), 0xd4);
+    }
+
+    
+
+    #[test]
+    fn test_mult() {
+        assert_eq!(FiniteMult(0x57, 0x13), 0xfe);
+        assert_eq!(FiniteMult(0x57, 0x83), 0xc1);
+    }
+
+    #[test]
+    fn test_xtime(){
+        assert_eq!(xtime(0x57), 0xae);
+        assert_eq!(xtime(0xae), 0x47);
+        assert_eq!(xtime(0x47), 0x8e);
+        assert_eq!(xtime(0x8e), 0x07);
+    }
+
+
+
+    //#[test]
+    //fn test_cipher() {
+        //assert_eq!(Cipher(input, sbox, w, Nr, Nb))
+    //}
 }
