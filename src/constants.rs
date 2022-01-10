@@ -39,8 +39,25 @@ pub const Nb: u32 = 4;
 pub const Nk: u32 = 4;       
 /// Number or rounds, function of Nk and Nb
 pub const Nr: u32  = 10;       
-
-
+/// The round constant
+pub const Rcon: [u32; 16] = [
+    0x00000000,
+    0x01000000,
+    0x02000000,
+    0x04000000,
+    0x08000000,
+    0x10000000,
+    0x20000000,
+    0x40000000,
+    0x80000000,
+    0x1b000000,
+    0x36000000,
+    0x51000000,  
+    0x6c000000,  
+    0x87000000,  
+    0xa2000000,  
+    0xbd000000,  
+    ];
 
 
 

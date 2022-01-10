@@ -11,14 +11,12 @@ use crate::inverse::InvCipher;
 
 fn encode(input: Vec<u8>) -> Vec<u8>{
     let K: Vec<u32> = Vec::new();   // the cipher key    
-    let Rcon: Vec<u8> = Vec::new();  // Round constant word array
-    Cipher(&input, Rcon)
+    Cipher(&input)
 }
 
 fn decode(input: Vec<u8>) -> Vec<u8> {
     let K: Vec<u32> = Vec::new();
-    let Rcon: Vec<u8> = Vec::new();
-    InvCipher(&input, Rcon)
+    InvCipher(&input)
 }
 
 /// Main Function
@@ -39,11 +37,9 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use crate::cipher::Cipher;
     use crate::common::KeyExpansion;
     use crate::constants::Nb;
     use crate::helpers::GenerateRoundConstant;
-    use crate::inverse::InvCipher;
     use crate::math::{FiniteMult, xtime, FiniteAdd};
 
     use crate::{encode, decode};
@@ -91,6 +87,5 @@ mod tests {
             OsRng.fill_bytes(&mut rbytes);
             assert_eq!(decode(encode(rbytes.to_vec())), rbytes);
         }
-        //assert_eq!(Cipher(input, sbox, w, Nr, Nb))
     }
 }

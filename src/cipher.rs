@@ -74,7 +74,7 @@ fn SubBytes(state: &mut Vec<Vec<u8>>) {
 /// Note in  -> vec<u8> [4 x Nb]
 ///      out -> vec<u8> [4 x Nb]
 ///      w   -> vec<u32> [Nb x (Nr+1)]
-pub fn Cipher(input: &Vec<u8>, Rcon: Vec<u8>) -> Vec<u8>
+pub fn Cipher(input: &Vec<u8>, ) -> Vec<u8>
 {
     //let state:Vec<Vec<u8>> = vec![vec![0; 4]; Nb as usize];
     let mut state = CopyToState(input.clone());

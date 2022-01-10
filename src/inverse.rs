@@ -36,7 +36,7 @@ fn InvSubBytes(state: &mut Vec<Vec<u8>>) {
 }
 
 /// The inverse of `Cipher`
-pub fn InvCipher(input: &Vec<u8>, Rcon: Vec<u8>) -> Vec<u8> {
+pub fn InvCipher(input: &Vec<u8>) -> Vec<u8> {
     let mut state = CopyToState(input.clone());
     let mut w: Vec<u8> = vec![0; (Nb*(Nr+1)) as usize];
 
